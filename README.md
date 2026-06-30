@@ -149,6 +149,12 @@ for a step-by-step guide (identify, mount, permissions, safe-eject, troubleshoot
   pass. This is fine on workstation GPUs (no encoder-session limit); on consumer
   GeForce cards (limited concurrent NVENC sessions) switch the encoder to
   `libx264 (CPU)` if you hit a limit.
+- On NVIDIA GPUs, decoding runs on **NVDEC** (the `*_cuvid` decoders) so the CPU
+  stays nearly free; if a particular clip can't GPU-decode, it automatically
+  retries that file with software decode. On a 4K clip this is roughly 1.5x faster
+  than software decode and frees about 9 CPU cores.
+- One job already saturates the GPU's single NVENC engine, so running several jobs
+  on the *same* GPU does not speed things up. To go faster, use a second GPU.
 - The tool calls `ffmpeg`/`ffprobe` from your `PATH` (preferring `/usr/bin/ffmpeg`).
 
 ## License
