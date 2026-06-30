@@ -13,7 +13,23 @@ rate** — they combine in a single GPU pass.
 - **Trim black border** — when cameras have different fields of view, auto-detect the
   bright imaged area and trim the black surround, leaving a small margin.
 
-Decoding and encoding run on an **NVIDIA GPU** (NVDEC + NVENC) with a CPU fallback.
+Encoding uses your GPU when possible, with a CPU fallback — the app **auto-detects
+which encoders your FFmpeg has at startup** and only offers those, defaulting to the
+fastest available.
+
+## Platform support
+
+Runs on **Windows, macOS, and Linux** (it's pure Python + FFmpeg). What differs is
+the acceleration:
+
+| Platform | Acceleration | Notes |
+|----------|--------------|-------|
+| Windows / Linux **with NVIDIA GPU** | NVDEC decode + **NVENC** encode | Fastest; default `h264_nvenc`. Needs an NVENC-enabled FFmpeg build. |
+| **macOS** (Apple Silicon or Intel) | **VideoToolbox** encode | No NVENC on Macs; the app offers `h264_videotoolbox` automatically. |
+| Any machine **without a supported GPU** | **CPU** (`libx264` / `libx265`) | Works everywhere, just slower. |
+
+You never have to pick manually — unavailable encoders simply don't appear in the
+dropdown, and the default is the best one your machine supports.
 
 <!-- Add a screenshot at assets/screenshot.png and it will show here -->
 <!-- ![Chop & Drop](assets/screenshot.png) -->
@@ -101,7 +117,7 @@ one. Each run also writes a `conversion_report.txt`.
 |---|---|
 | **Drop frame rate to** | Target fps (frames dropped, duration preserved). |
 | **Crop margin (px)** | Grows each crop box outward by N px (keeps edge worms / leaves a little black border). Negative shaves inward. Width/height are forced even (yuv420p). |
-| **Encoder** | `h264_nvenc` (default), `hevc_nvenc`, or `libx264 (CPU)`. |
+| **Encoder** | Auto-detected list (NVENC / VideoToolbox / libx264 / libx265); defaults to the fastest your machine supports. |
 | **Quality (CQ/CRF)** | Lower = better quality / larger file. Default 19. |
 | **GPU index** | Which NVIDIA GPU to use (pinned via `CUDA_VISIBLE_DEVICES`). |
 | **Overwrite** | Off by default; existing outputs are skipped (resumable). |

@@ -53,6 +53,42 @@ FFMPEG = "/usr/bin/ffmpeg" if os.path.exists("/usr/bin/ffmpeg") else (shutil.whi
 FFPROBE = "/usr/bin/ffprobe" if os.path.exists("/usr/bin/ffprobe") else (shutil.which("ffprobe") or "ffprobe")
 VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv", ".m4v", ".mpg", ".mpeg", ".wmv", ".flv", ".ts", ".hevc", ".h265")
 
+# Encoder candidates, in preference order. kind drives how we accelerate:
+#   nvenc        -> NVIDIA GPU (CUDA decode + NVENC encode, pinnable per GPU)
+#   videotoolbox -> Apple GPU (encode-only HW accel; macOS)
+#   cpu          -> software (works everywhere)
+ENC_CANDIDATES = [
+    {"codec": "h264_nvenc",        "kind": "nvenc",        "label": "h264_nvenc (NVIDIA GPU)"},
+    {"codec": "hevc_nvenc",        "kind": "nvenc",        "label": "hevc_nvenc (NVIDIA GPU)"},
+    {"codec": "h264_videotoolbox", "kind": "videotoolbox", "label": "h264_videotoolbox (Apple GPU)"},
+    {"codec": "hevc_videotoolbox", "kind": "videotoolbox", "label": "hevc_videotoolbox (Apple GPU)"},
+    {"codec": "libx264",           "kind": "cpu",          "label": "libx264 (CPU)"},
+    {"codec": "libx265",           "kind": "cpu",          "label": "libx265 (CPU)"},
+]
+
+
+def available_encoders():
+    """Probe `ffmpeg -encoders` and return the ENC_CANDIDATES that are present.
+
+    Always guarantees at least libx264 (CPU) so the GUI is usable; if ffmpeg
+    can't be run at all, returns the libx264 entry as a best-effort fallback.
+    """
+    present = set()
+    try:
+        out = subprocess.run([FFMPEG, "-hide_banner", "-encoders"],
+                             capture_output=True, text=True, timeout=15)
+        text = out.stdout + out.stderr
+        for c in ENC_CANDIDATES:
+            # encoder lines look like " V....D h264_nvenc   NVIDIA NVENC ..."
+            if re.search(r"\b" + re.escape(c["codec"]) + r"\b", text):
+                present.add(c["codec"])
+    except Exception:
+        pass
+    encs = [c for c in ENC_CANDIDATES if c["codec"] in present]
+    if not any(c["kind"] == "cpu" for c in encs):
+        encs.append(ENC_CANDIDATES[4])  # ensure libx264 fallback is always offered
+    return encs
+
 
 # =============================================================================
 # Well-grid detection  (self-contained copy of the project's crop_wells logic)
@@ -208,6 +244,26 @@ class App(tk.Tk):
 
         self._build_ui()
         self.after(100, self._drain_queue)
+        self._startup_checks()
+
+    def _startup_checks(self):
+        if shutil.which(FFMPEG) is None and not os.path.exists(FFMPEG):
+            messagebox.showwarning(
+                "FFmpeg not found",
+                "Could not find 'ffmpeg' on your PATH.\n\n"
+                "Install it first:\n"
+                "  • Ubuntu/Debian:  sudo apt install ffmpeg\n"
+                "  • macOS (Homebrew):  brew install ffmpeg\n"
+                "  • Windows:  download from ffmpeg.org and add it to PATH")
+            return
+        kinds = {c["kind"] for c in self.encoders}
+        if "nvenc" in kinds:
+            self._log(f"Encoders: NVIDIA NVENC available. Default = {self.enc_var.get()}.\n")
+        elif "videotoolbox" in kinds:
+            self._log(f"Encoders: no NVENC; Apple VideoToolbox available. Default = {self.enc_var.get()}.\n")
+        else:
+            self._log("Encoders: no GPU encoder found — using CPU (libx264). This is normal "
+                      "on Macs / non-NVIDIA PCs; conversion just runs on the CPU.\n")
 
     # ---------------- UI ----------------
     def _build_ui(self):
@@ -258,27 +314,30 @@ class App(tk.Tk):
         self.margin_entry = ttk.Entry(frm_set, textvariable=self.margin_var, width=8)
         self.margin_entry.grid(row=0, column=3, sticky="w", pady=4)
 
+        # encoders detected from this machine's ffmpeg (best HW option first)
+        self.encoders = available_encoders()
+        self.enc_specs = {c["label"]: c for c in self.encoders}
         ttk.Label(frm_set, text="Encoder:").grid(row=1, column=0, sticky="w", padx=8, pady=4)
-        self.enc_var = tk.StringVar(value="h264_nvenc")
-        ttk.Combobox(frm_set, textvariable=self.enc_var, width=14, state="readonly",
-                     values=["h264_nvenc", "hevc_nvenc", "libx264 (CPU)"]
-                     ).grid(row=1, column=1, sticky="w", pady=4)
+        self.enc_var = tk.StringVar(value=self.encoders[0]["label"])
+        ttk.Combobox(frm_set, textvariable=self.enc_var, width=28, state="readonly",
+                     values=[c["label"] for c in self.encoders]
+                     ).grid(row=1, column=1, columnspan=2, sticky="w", pady=4)
 
-        ttk.Label(frm_set, text="Quality (CQ/CRF):").grid(row=1, column=2, sticky="e", padx=8, pady=4)
+        ttk.Label(frm_set, text="Quality (CQ/CRF):").grid(row=2, column=0, sticky="w", padx=8, pady=4)
         self.q_var = tk.StringVar(value="19")
         ttk.Spinbox(frm_set, from_=0, to=51, textvariable=self.q_var, width=8
-                    ).grid(row=1, column=3, sticky="w", pady=4)
+                    ).grid(row=2, column=1, sticky="w", pady=4)
 
-        ttk.Label(frm_set, text="GPU index:").grid(row=2, column=0, sticky="w", padx=8, pady=4)
+        ttk.Label(frm_set, text="GPU index:").grid(row=3, column=0, sticky="w", padx=8, pady=4)
         self.gpu_var = tk.StringVar(value="1")
         ttk.Spinbox(frm_set, from_=0, to=7, textvariable=self.gpu_var, width=8
-                    ).grid(row=2, column=1, sticky="w", pady=4)
-        ttk.Label(frm_set, text="(GPU 0 = live recorder — leave on 1)",
-                  foreground="#888").grid(row=2, column=2, columnspan=2, sticky="w", padx=8)
+                    ).grid(row=3, column=1, sticky="w", pady=4)
+        ttk.Label(frm_set, text="(NVIDIA only; on the MAT rig GPU 0 = live recorder)",
+                  foreground="#888").grid(row=3, column=2, columnspan=2, sticky="w", padx=8)
 
         self.overwrite_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(frm_set, text="Overwrite existing outputs",
-                        variable=self.overwrite_var).grid(row=3, column=0, columnspan=2, sticky="w", padx=8, pady=4)
+                        variable=self.overwrite_var).grid(row=4, column=0, columnspan=2, sticky="w", padx=8, pady=4)
 
         # ----- output -----
         frm_out = ttk.LabelFrame(self, text="Output")
@@ -420,12 +479,23 @@ class App(tk.Tk):
 
     # ---------------- conversion ----------------
     def _enc_opts(self):
-        enc = self.enc_var.get()
-        q = self.q_var.get().strip() or "19"
-        if enc.startswith("libx264"):
-            return ["-c:v", "libx264", "-preset", "veryfast", "-crf", q, "-pix_fmt", "yuv420p"], False
-        codec = "h264_nvenc" if enc.startswith("h264") else "hevc_nvenc"
-        return ["-c:v", codec, "-preset", "p5", "-rc", "vbr", "-cq", q, "-b:v", "0", "-pix_fmt", "yuv420p"], True
+        """Return (ffmpeg output options, kind) for the selected encoder."""
+        spec = self.enc_specs.get(self.enc_var.get(), self.encoders[0])
+        codec, kind = spec["codec"], spec["kind"]
+        try:
+            q = int(self.q_var.get().strip())
+        except ValueError:
+            q = 19
+        if kind == "nvenc":
+            opts = ["-c:v", codec, "-preset", "p5", "-rc", "vbr",
+                    "-cq", str(q), "-b:v", "0", "-pix_fmt", "yuv420p"]
+        elif kind == "videotoolbox":
+            # VideoToolbox uses -q:v 1..100 (higher = better); map from CQ 0..51.
+            vt = max(1, min(100, round((51 - q) / 51 * 100)))
+            opts = ["-c:v", codec, "-q:v", str(vt), "-pix_fmt", "yuv420p"]
+        else:  # cpu (libx264 / libx265)
+            opts = ["-c:v", codec, "-preset", "veryfast", "-crf", str(q), "-pix_fmt", "yuv420p"]
+        return opts, kind
 
     def start(self):
         if self.worker and self.worker.is_alive():
@@ -453,12 +523,12 @@ class App(tk.Tk):
         self.convert_btn.config(state="disabled")
         self.cancel_btn.config(state="normal")
         self.preview_btn.config(state="disabled")
-        enc_opts, use_gpu = self._enc_opts()
+        enc_opts, enc_kind = self._enc_opts()
         params = dict(
             files=list(self.files), crop=crop, fps_on=fps_on,
             fps=self.fps_var.get().strip(),
             margin=int(self.margin_var.get() or 12),
-            enc_opts=enc_opts, use_gpu=use_gpu,
+            enc_opts=enc_opts, enc_kind=enc_kind,
             gpu=self.gpu_var.get().strip() or "1",
             overwrite=self.overwrite_var.get(),
             out_root=out_root,
@@ -475,10 +545,11 @@ class App(tk.Tk):
 
     def _run(self, p):
         n = len(p["files"])
+        accel = f"NVIDIA GPU {p['gpu']}" if p["enc_kind"] == "nvenc" else (
+            "Apple GPU (VideoToolbox)" if p["enc_kind"] == "videotoolbox" else "CPU")
         report = ["Chop & Drop — run report",
                   f"crop={p['crop']} fps={'off' if not p['fps_on'] else p['fps']} "
-                  f"margin={p['margin']} encoder={p['enc_opts'][1]} "
-                  f"gpu={p['gpu'] if p['use_gpu'] else 'CPU'}", ""]
+                  f"margin={p['margin']} encoder={p['enc_opts'][1]} accel={accel}", ""]
         for idx, src in enumerate(p["files"]):
             if self.cancel_flag.is_set():
                 break
@@ -515,9 +586,11 @@ class App(tk.Tk):
         outdir = self._out_dir_for(src, p)
         duration = probe_duration(src)
         enc_opts = p["enc_opts"]
-        in_opts = ["-hwaccel", "cuda", "-hwaccel_device", "0"] if p["use_gpu"] else []
+        # CUDA decode + per-GPU pinning only applies to NVENC. VideoToolbox is
+        # encode-only HW accel (no input flags); CPU needs neither.
+        in_opts = ["-hwaccel", "cuda", "-hwaccel_device", "0"] if p["enc_kind"] == "nvenc" else []
         env = dict(os.environ)
-        if p["use_gpu"]:
+        if p["enc_kind"] == "nvenc":
             env["CUDA_VISIBLE_DEVICES"] = p["gpu"]  # physical GPU -> appears as device 0
         ow = ["-y"] if p["overwrite"] else ["-n"]
         fps_suffix = f"_{p['fps']}fps" if p["fps_on"] else ""
