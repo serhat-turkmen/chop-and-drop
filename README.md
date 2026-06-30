@@ -4,16 +4,16 @@
 
 A small, self-contained desktop GUI for batch-preparing microscopy / behavioural
 recordings for analysis. Pick a **crop** option and optionally **drop the frame
-rate** — they combine in a single GPU pass.
+rate**; they combine in a single GPU pass.
 
-- **Drop frames** — re-encode to a lower frame rate (e.g. **25 → 7.5 fps**) while
+- **Drop frames**: re-encode to a lower frame rate (e.g. **25 → 7.5 fps**) while
   keeping the **same duration** (frames are dropped, playback is *not* slowed down).
-- **Chop wells** — split a multi-well plate (96 / 24 / 6-well) into **one video per
+- **Chop wells**: split a multi-well plate (96 / 24 / 6-well) into **one video per
   well**, with the grid auto-detected.
-- **Trim black border** — when cameras have different fields of view, auto-detect the
+- **Trim black border**: when cameras have different fields of view, auto-detect the
   bright imaged area and trim the black surround, leaving a small margin.
 
-Encoding uses your GPU when possible, with a CPU fallback — the app **auto-detects
+Encoding uses your GPU when possible, with a CPU fallback. The app **auto-detects
 which encoders your FFmpeg has at startup** and only offers those, defaulting to the
 fastest available.
 
@@ -28,7 +28,7 @@ the acceleration:
 | **macOS** (Apple Silicon or Intel) | **VideoToolbox** encode | No NVENC on Macs; the app offers `h264_videotoolbox` automatically. |
 | Any machine **without a supported GPU** | **CPU** (`libx264` / `libx265`) | Works everywhere, just slower. |
 
-You never have to pick manually — unavailable encoders simply don't appear in the
+You never have to pick manually; unavailable encoders simply don't appear in the
 dropdown, and the default is the best one your machine supports.
 
 ![Chop & Drop](assets/screenshot.png)
@@ -39,14 +39,14 @@ dropdown, and the default is the best one your machine supports.
 
 - **Python 3.8+** with **Tkinter** (ships with python.org installers and most
   Linux `python3-tk` packages; included in Anaconda/Miniconda).
-- **NumPy** and **OpenCV** (`opencv-python`) — see install below.
+- **NumPy** and **OpenCV** (`opencv-python`); see install below.
 - **FFmpeg** on your `PATH` (or at `/usr/bin/ffmpeg`).
   - For GPU encoding you need an **NVIDIA GPU** and an FFmpeg build with
     **NVENC/NVDEC** (`h264_nvenc` / `hevc_nvenc`). Check with:
     ```bash
     ffmpeg -hide_banner -encoders | grep nvenc
     ```
-  - No NVIDIA GPU? Choose the **`libx264 (CPU)`** encoder in the GUI — everything
+  - No NVIDIA GPU? Choose the **`libx264 (CPU)`** encoder in the GUI; everything
     still works, just on the CPU.
 
 ## Install
@@ -92,12 +92,12 @@ On Linux you can also use the included **`Chop & Drop.desktop`** launcher (edit 
 
 ## Usage
 
-1. **Add videos** — *Add files…* or *Add folder…*. With **Include subfolders**
+1. **Add videos**: *Add files…* or *Add folder…*. With **Include subfolders**
    ticked (default) it recursively finds every video in all nested subfolders and
    processes them one by one.
-2. **Choose a crop** — *No crop*, *Crop wells*, or *Trim black border*.
-3. **(Optional) Drop frame rate** — tick the box and set the target fps (default 7.5).
-4. **Preview crop** — overlays the detected wells / content box on a frame so you can
+2. **Choose a crop**: *No crop*, *Crop wells*, or *Trim black border*.
+3. **(Optional) Drop frame rate**: tick the box and set the target fps (default 7.5).
+4. **Preview crop**: overlays the detected wells / content box on a frame so you can
    confirm detection and tune the margin before committing.
 5. **Convert.**
 
@@ -128,9 +128,9 @@ one. Each run also writes a `conversion_report.txt`.
 Both detectors take the **median of ~15 frames** (removes moving subjects, leaves
 the static scene) and Otsu-binarise it.
 
-- **Wells** — bright well bands are found by row/column projection; partial edge wells
+- **Wells**: bright well bands are found by row/column projection; partial edge wells
   (< 60 % of the median full-well span) are dropped.
-- **Border trim** — the outer extent of the bright region (ignoring rows/cols that are
+- **Border trim**: the outer extent of the bright region (ignoring rows/cols that are
   < 2 % bright) becomes the content box; the margin is then added.
 
 Frame-rate reduction uses FFmpeg's `fps` filter, which drops frames to hit the target
@@ -153,4 +153,4 @@ for a step-by-step guide (identify, mount, permissions, safe-eject, troubleshoot
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

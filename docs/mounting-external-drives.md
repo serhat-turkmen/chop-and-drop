@@ -5,7 +5,7 @@ drive available so you can point **Chop & Drop** at it (via **Add folder…**).
 
 - **macOS / Windows:** external drives mount automatically when plugged in. On
   macOS they appear under `/Volumes/<NAME>`; on Windows as a drive letter
-  (`E:\`, `F:\`, …). No manual step needed — skip to the bottom.
+  (`E:\`, `F:\`, …). No manual step needed; skip to the bottom.
 - **Linux (Ubuntu/GNOME):** USB drives usually auto-mount too, but sometimes you
   need to mount them by hand. The rest of this guide covers that.
 
@@ -27,7 +27,7 @@ sdb         3.6T disk
 └─sdb1      3.6T part exfat  /media/serhat/DAISY_SSD    DAISY_SSD
 ```
 
-If your drive shows a **MOUNTPOINT** (e.g. `/media/<you>/DAISY_SSD`), it's ready —
+If your drive shows a **MOUNTPOINT** (e.g. `/media/<you>/DAISY_SSD`), it's ready;
 that path is the folder to use in Chop & Drop. On Ubuntu, auto-mounted drives live
 under `/media/<your-username>/<LABEL>`.
 
@@ -84,7 +84,7 @@ In the GNOME Files app you can also click the ⏏ (eject) icon next to the drive
 ## Troubleshooting
 
 **The drive shows `0 B` and no partitions** (e.g. `sda  0B disk` in `lsblk`)
-This is not a mount problem — the drive isn't initializing. Try:
+This is not a mount problem; the drive isn't initializing. Try:
 
 1. Unplug and replug, preferably into a **rear USB port** and a different cable
    (front ports / hubs often under-power 3.5" or spinning drives).
@@ -99,12 +99,12 @@ This is not a mount problem — the drive isn't initializing. Try:
    lsblk -o NAME,SIZE,FSTYPE,LABEL
    ```
 
-**"mount: only root can do that"** — prefix the command with `sudo`.
+**"mount: only root can do that"**: prefix the command with `sudo`.
 
-**"wrong fs type, bad option, bad superblock"** — usually a missing driver
+**"wrong fs type, bad option, bad superblock"**: usually a missing driver
 (see step 3) or a corrupted/unformatted partition.
 
-**Permission denied writing to the drive** — remount with the `uid=/gid=` options
+**Permission denied writing to the drive**: remount with the `uid=/gid=` options
 shown in step 2 (exFAT/NTFS), or `sudo chown -R $(id -u):$(id -g) /mnt/ext` (ext4).
 
 ---
