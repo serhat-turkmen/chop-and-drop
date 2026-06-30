@@ -234,8 +234,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("🪓 Chop & Drop — chop the wells, drop the frames")
-        self.geometry("780x880")
-        self.minsize(720, 800)
+        self.geometry("780x910")
+        self.minsize(720, 840)
 
         self.files = []
         self.worker = None
