@@ -234,8 +234,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("🪓 Chop & Drop — chop the wells, drop the frames")
-        self.geometry("780x760")
-        self.minsize(700, 700)
+        self.geometry("780x880")
+        self.minsize(720, 800)
 
         self.files = []
         self.worker = None
@@ -248,13 +248,20 @@ class App(tk.Tk):
         self.after(100, self._drain_queue)
         self._startup_checks()
 
+    # minimalistic light palette (soft neutrals + one calm accent)
+    PALETTE = {
+        "bg": "#F4F6F9", "surface": "#FFFFFF", "text": "#23272F",
+        "muted": "#98A1AE", "border": "#E2E6EC", "trough": "#E8EBF0",
+        "accent": "#3B82C4", "accent_dark": "#2F6CA6", "accent_text": "#FFFFFF",
+    }
+
     def _apply_style(self):
-        """Modern look: a flat ttk theme + the platform's native UI font."""
+        """Modern minimalistic look: flat theme, native UI font, soft light palette."""
+        c = self.PALETTE
         style = ttk.Style(self)
-        for theme in ("clam",):           # flatter/cleaner than the legacy default
-            if theme in style.theme_names():
-                style.theme_use(theme)
-                break
+        if "clam" in style.theme_names():     # flat/clean; supports colour config
+            style.theme_use("clam")
+
         # pick the first modern UI font that's actually installed
         families = set(tkfont.families())
         prefs = ["Segoe UI", "SF Pro Text", "SF Pro Display", "Helvetica Neue",
@@ -267,9 +274,48 @@ class App(tk.Tk):
                     tkfont.nametofont(name).configure(family=self.ui_family, size=self.ui_size)
                 except tk.TclError:
                     pass
-            style.configure(".", font=(self.ui_family, self.ui_size))
-            style.configure("TButton", padding=(10, 5))
-            style.configure("TLabelframe.Label", font=(self.ui_family, self.ui_size, "bold"))
+        base = (self.ui_family or "TkDefaultFont", self.ui_size)
+
+        self.configure(bg=c["bg"])
+        style.configure(".", background=c["bg"], foreground=c["text"],
+                        fieldbackground=c["surface"], bordercolor=c["border"], font=base)
+        style.configure("TFrame", background=c["bg"])
+        style.configure("TLabel", background=c["bg"], foreground=c["text"])
+        style.configure("Footer.TLabel", background=c["bg"], foreground=c["muted"],
+                        font=(self.ui_family or "TkDefaultFont", 9))
+        style.configure("TLabelframe", background=c["bg"], bordercolor=c["border"],
+                        relief="solid", borderwidth=1)
+        style.configure("TLabelframe.Label", background=c["bg"], foreground=c["text"],
+                        font=(self.ui_family or "TkDefaultFont", self.ui_size, "bold"))
+        for w in ("TCheckbutton", "TRadiobutton"):
+            style.configure(w, background=c["bg"], foreground=c["text"])
+            style.map(w, background=[("active", c["bg"])])
+
+        # neutral buttons + one accent (primary) style
+        style.configure("TButton", background=c["surface"], foreground=c["text"],
+                        bordercolor=c["border"], focuscolor=c["bg"], padding=(12, 6), relief="flat")
+        style.map("TButton", background=[("active", "#ECEFF3"), ("pressed", "#E3E7ED"),
+                                         ("disabled", c["bg"])],
+                  bordercolor=[("active", c["accent"])], foreground=[("disabled", c["muted"])])
+        style.configure("Accent.TButton", background=c["accent"], foreground=c["accent_text"],
+                        bordercolor=c["accent"], padding=(16, 6))
+        style.map("Accent.TButton",
+                  background=[("active", c["accent_dark"]), ("pressed", c["accent_dark"]),
+                             ("disabled", "#BBC4D0")],
+                  foreground=[("disabled", "#EEF2F6")])
+
+        # inputs
+        for w in ("TEntry", "TSpinbox", "TCombobox"):
+            style.configure(w, fieldbackground=c["surface"], background=c["surface"],
+                            foreground=c["text"], bordercolor=c["border"], arrowcolor=c["text"])
+        style.map("TCombobox", fieldbackground=[("readonly", c["surface"])],
+                  foreground=[("readonly", c["text"])])
+
+        # progress bars + scrollbar
+        style.configure("TProgressbar", background=c["accent"], troughcolor=c["trough"],
+                        bordercolor=c["border"], lightcolor=c["accent"], darkcolor=c["accent"])
+        style.configure("TScrollbar", background=c["surface"], troughcolor=c["bg"],
+                        bordercolor=c["border"], arrowcolor=c["text"])
 
     def _startup_checks(self):
         if shutil.which(FFMPEG) is None and not os.path.exists(FFMPEG):
@@ -293,13 +339,17 @@ class App(tk.Tk):
     # ---------------- UI ----------------
     def _build_ui(self):
         pad = {"padx": 8, "pady": 4}
+        c = self.PALETTE
 
         # ----- input files -----
         frm_files = ttk.LabelFrame(self, text="Input videos")
         frm_files.pack(fill="both", expand=True, **pad)
         self.listbox = tk.Listbox(frm_files, selectmode=tk.EXTENDED, height=7,
                                   font=(self.ui_family or "TkDefaultFont", self.ui_size),
-                                  borderwidth=0, highlightthickness=1, activestyle="none")
+                                  borderwidth=0, highlightthickness=1, activestyle="none",
+                                  bg=c["surface"], fg=c["text"],
+                                  selectbackground=c["accent"], selectforeground=c["accent_text"],
+                                  highlightbackground=c["border"], highlightcolor=c["accent"])
         self.listbox.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
         sb = ttk.Scrollbar(frm_files, command=self.listbox.yview)
         sb.pack(side="left", fill="y", pady=8)
@@ -360,7 +410,7 @@ class App(tk.Tk):
         ttk.Spinbox(frm_set, from_=0, to=7, textvariable=self.gpu_var, width=8
                     ).grid(row=3, column=1, sticky="w", pady=4)
         ttk.Label(frm_set, text="(NVIDIA only; on the MAT rig GPU 0 = live recorder)",
-                  foreground="#888").grid(row=3, column=2, columnspan=2, sticky="w", padx=8)
+                  foreground=c["muted"]).grid(row=3, column=2, columnspan=2, sticky="w", padx=8)
 
         self.overwrite_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(frm_set, text="Overwrite existing outputs",
@@ -374,7 +424,7 @@ class App(tk.Tk):
         ttk.Entry(frm_out, textvariable=self.outdir_var).grid(row=0, column=1, sticky="we", pady=4)
         ttk.Button(frm_out, text="Browse…", command=self.pick_outdir).grid(row=0, column=2, padx=8)
         ttk.Label(frm_out, text="(blank = beside each source video)",
-                  foreground="#888").grid(row=1, column=1, sticky="w")
+                  foreground=c["muted"]).grid(row=1, column=1, sticky="w")
         frm_out.columnconfigure(1, weight=1)
 
         # ----- progress -----
@@ -393,7 +443,9 @@ class App(tk.Tk):
         frm_log.pack(fill="both", expand=True, **pad)
         self.log = tk.Text(frm_log, height=8, wrap="word", state="disabled",
                            font=(self.ui_family or "TkDefaultFont", self.ui_size),
-                           borderwidth=0, highlightthickness=1, padx=6, pady=4)
+                           borderwidth=0, highlightthickness=1, padx=6, pady=4,
+                           bg=c["surface"], fg=c["text"], insertbackground=c["text"],
+                           highlightbackground=c["border"], highlightcolor=c["accent"])
         self.log.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
         lsb = ttk.Scrollbar(frm_log, command=self.log.yview)
         lsb.pack(side="left", fill="y", pady=8)
@@ -403,10 +455,14 @@ class App(tk.Tk):
         frm_a = ttk.Frame(self); frm_a.pack(fill="x", **pad)
         self.preview_btn = ttk.Button(frm_a, text="Preview crop", command=self.preview_grid)
         self.preview_btn.pack(side="left", padx=8)
-        self.convert_btn = ttk.Button(frm_a, text="Convert", command=self.start)
+        self.convert_btn = ttk.Button(frm_a, text="Convert", command=self.start, style="Accent.TButton")
         self.convert_btn.pack(side="left", padx=8)
         self.cancel_btn = ttk.Button(frm_a, text="Cancel", command=self.cancel, state="disabled")
         self.cancel_btn.pack(side="left")
+
+        # ----- footer credit (minimalistic) -----
+        ttk.Label(self, text="Chop & Drop  ·  MAT System  ·  Serhat Turkmen  ·  2026",
+                  style="Footer.TLabel", anchor="e").pack(fill="x", padx=12, pady=(0, 6))
 
         self._sync_enabled()
 
