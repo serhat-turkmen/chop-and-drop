@@ -281,8 +281,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("🪓 Chop & Drop: chop the wells, drop the frames")
-        self.geometry("780x910")
-        self.minsize(720, 840)
+        self.geometry("800x940")
+        self.minsize(720, 640)
 
         self.files = []
         self.worker = None
@@ -332,7 +332,7 @@ class App(tk.Tk):
                         font=(self.ui_family or "TkDefaultFont", 9))
         style.configure("TLabelframe", background=c["bg"], bordercolor=c["border"],
                         relief="solid", borderwidth=1)
-        style.configure("TLabelframe.Label", background=c["bg"], foreground=c["text"],
+        style.configure("TLabelframe.Label", background=c["bg"], foreground=c["accent"],
                         font=(self.ui_family or "TkDefaultFont", self.ui_size, "bold"))
         for w in ("TCheckbutton", "TRadiobutton"):
             style.configure(w, background=c["bg"], foreground=c["text"])
@@ -387,6 +387,20 @@ class App(tk.Tk):
     def _build_ui(self):
         pad = {"padx": 8, "pady": 4}
         c = self.PALETTE
+
+        # ----- action bar + footer: pinned to the bottom so they're ALWAYS
+        # visible no matter the window size (packed first with side='bottom';
+        # the lists/log above just shrink instead of pushing these off-screen) -----
+        ttk.Label(self, text="Chop & Drop  ·  MAT System  ·  Serhat Turkmen  ·  2026",
+                  style="Footer.TLabel", anchor="e").pack(side="bottom", fill="x", padx=12, pady=(0, 6))
+        frm_a = ttk.Frame(self)
+        frm_a.pack(side="bottom", fill="x", **pad)
+        self.preview_btn = ttk.Button(frm_a, text="Preview crop", command=self.preview_grid)
+        self.preview_btn.pack(side="left", padx=8)
+        self.convert_btn = ttk.Button(frm_a, text="Convert", command=self.start, style="Accent.TButton")
+        self.convert_btn.pack(side="left", padx=8)
+        self.cancel_btn = ttk.Button(frm_a, text="Cancel", command=self.cancel, state="disabled")
+        self.cancel_btn.pack(side="left")
 
         # ----- input files -----
         frm_files = ttk.LabelFrame(self, text="Input videos")
@@ -497,19 +511,6 @@ class App(tk.Tk):
         lsb = ttk.Scrollbar(frm_log, command=self.log.yview)
         lsb.pack(side="left", fill="y", pady=8)
         self.log.config(yscrollcommand=lsb.set)
-
-        # ----- actions -----
-        frm_a = ttk.Frame(self); frm_a.pack(fill="x", **pad)
-        self.preview_btn = ttk.Button(frm_a, text="Preview crop", command=self.preview_grid)
-        self.preview_btn.pack(side="left", padx=8)
-        self.convert_btn = ttk.Button(frm_a, text="Convert", command=self.start, style="Accent.TButton")
-        self.convert_btn.pack(side="left", padx=8)
-        self.cancel_btn = ttk.Button(frm_a, text="Cancel", command=self.cancel, state="disabled")
-        self.cancel_btn.pack(side="left")
-
-        # ----- footer credit (minimalistic) -----
-        ttk.Label(self, text="Chop & Drop  ·  MAT System  ·  Serhat Turkmen  ·  2026",
-                  style="Footer.TLabel", anchor="e").pack(fill="x", padx=12, pady=(0, 6))
 
         self._sync_enabled()
 
