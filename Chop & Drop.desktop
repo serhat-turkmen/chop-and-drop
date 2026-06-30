@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Chop & Drop
-Comment=Chop the wells, drop the frames — GPU FPS + well-crop tool
+Comment=Chop the wells, drop the frames. GPU FPS + well-crop tool
 # Edit these two paths to where you cloned the repo, then mark this file executable.
 Exec=/home/serhat/miniconda3/bin/python3 /home/serhat/Desktop/chop-and-drop/chop_and_drop.py
 Path=/home/serhat/Desktop/chop-and-drop

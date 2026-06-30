@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chop-and-drop"
 version = "1.0.0"
-description = "Chop the wells, drop the frames — a small GPU GUI to crop wells / trim borders and reduce frame rate of recordings."
+description = "Chop the wells, drop the frames: a small GPU GUI to crop wells / trim borders and reduce frame rate of recordings."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
