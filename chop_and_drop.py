@@ -5,7 +5,7 @@ Chop & Drop  (standalone)
 "Chop the wells, drop the frames."
 
 A small GUI to prepare MAT-rig recordings for analysis. Pick a CROP option and
-optionally tick "Drop frame rate" — they combine freely in ONE GPU decode pass.
+optionally tick "Drop frame rate"; they combine freely in ONE GPU decode pass.
 
   CROP (chop):
     - No crop          - keep the full frame.
@@ -233,7 +233,7 @@ def probe_duration(path):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("🪓 Chop & Drop — chop the wells, drop the frames")
+        self.title("🪓 Chop & Drop: chop the wells, drop the frames")
         self.geometry("780x910")
         self.minsize(720, 840)
 
@@ -333,7 +333,7 @@ class App(tk.Tk):
         elif "videotoolbox" in kinds:
             self._log(f"Encoders: no NVENC; Apple VideoToolbox available. Default = {self.enc_var.get()}.\n")
         else:
-            self._log("Encoders: no GPU encoder found — using CPU (libx264). This is normal "
+            self._log("Encoders: no GPU encoder found, using CPU (libx264). This is normal "
                       "on Macs / non-NVIDIA PCs; conversion just runs on the CPU.\n")
 
     # ---------------- UI ----------------
@@ -555,10 +555,10 @@ class App(tk.Tk):
 
     def _show_preview(self, tmp, n, name, kind):
         win = tk.Toplevel(self)
-        win.title(f"Crop preview — {name}: {n} {kind}")
+        win.title(f"Crop preview ({name}): {n} {kind}")
         img = tk.PhotoImage(file=tmp)
         self._preview_img = img  # keep ref
-        ttk.Label(win, text=f"{name} — detected {n} {kind} (red box incl. margin)").pack(padx=8, pady=6)
+        ttk.Label(win, text=f"{name}: {n} {kind} detected (red box incl. margin)").pack(padx=8, pady=6)
         tk.Label(win, image=img).pack(padx=8, pady=8)
         ttk.Button(win, text="Close", command=win.destroy).pack(pady=6)
 
@@ -632,7 +632,7 @@ class App(tk.Tk):
         n = len(p["files"])
         accel = f"NVIDIA GPU {p['gpu']}" if p["enc_kind"] == "nvenc" else (
             "Apple GPU (VideoToolbox)" if p["enc_kind"] == "videotoolbox" else "CPU")
-        report = ["Chop & Drop — run report",
+        report = ["Chop & Drop run report",
                   f"crop={p['crop']} fps={'off' if not p['fps_on'] else p['fps']} "
                   f"margin={p['margin']} encoder={p['enc_opts'][1]} accel={accel}", ""]
         for idx, src in enumerate(p["files"]):
