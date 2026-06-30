@@ -12,6 +12,9 @@ env/
 .chopdrop_preview.png
 conversion_report.txt
 
+# Local dev notes / conversation logs (not for the public repo)
+notes/
+
 # OS / editor
 .DS_Store
 *.swp
