@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/turkmenlab/chop-and-drop"
+Homepage = "https://github.com/serhat-turkmen/chop-and-drop"
 
 [project.scripts]
 chop-and-drop = "chop_and_drop:main"

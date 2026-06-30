@@ -44,6 +44,7 @@ import threading
 import queue
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font as tkfont
 
 import numpy as np
 import cv2
@@ -242,9 +243,33 @@ class App(tk.Tk):
         self.msg_q = queue.Queue()
         self._preview_img = None  # keep ref so Tk doesn't GC it
 
+        self._apply_style()
         self._build_ui()
         self.after(100, self._drain_queue)
         self._startup_checks()
+
+    def _apply_style(self):
+        """Modern look: a flat ttk theme + the platform's native UI font."""
+        style = ttk.Style(self)
+        for theme in ("clam",):           # flatter/cleaner than the legacy default
+            if theme in style.theme_names():
+                style.theme_use(theme)
+                break
+        # pick the first modern UI font that's actually installed
+        families = set(tkfont.families())
+        prefs = ["Segoe UI", "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+                 "Inter", "Ubuntu", "Cantarell", "Noto Sans", "Roboto", "DejaVu Sans"]
+        self.ui_family = next((f for f in prefs if f in families), None)
+        self.ui_size = 10
+        if self.ui_family:
+            for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
+                try:
+                    tkfont.nametofont(name).configure(family=self.ui_family, size=self.ui_size)
+                except tk.TclError:
+                    pass
+            style.configure(".", font=(self.ui_family, self.ui_size))
+            style.configure("TButton", padding=(10, 5))
+            style.configure("TLabelframe.Label", font=(self.ui_family, self.ui_size, "bold"))
 
     def _startup_checks(self):
         if shutil.which(FFMPEG) is None and not os.path.exists(FFMPEG):
@@ -272,7 +297,9 @@ class App(tk.Tk):
         # ----- input files -----
         frm_files = ttk.LabelFrame(self, text="Input videos")
         frm_files.pack(fill="both", expand=True, **pad)
-        self.listbox = tk.Listbox(frm_files, selectmode=tk.EXTENDED, height=7)
+        self.listbox = tk.Listbox(frm_files, selectmode=tk.EXTENDED, height=7,
+                                  font=(self.ui_family or "TkDefaultFont", self.ui_size),
+                                  borderwidth=0, highlightthickness=1, activestyle="none")
         self.listbox.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
         sb = ttk.Scrollbar(frm_files, command=self.listbox.yview)
         sb.pack(side="left", fill="y", pady=8)
@@ -364,7 +391,9 @@ class App(tk.Tk):
         # ----- log -----
         frm_log = ttk.LabelFrame(self, text="Log / report")
         frm_log.pack(fill="both", expand=True, **pad)
-        self.log = tk.Text(frm_log, height=8, wrap="word", state="disabled")
+        self.log = tk.Text(frm_log, height=8, wrap="word", state="disabled",
+                           font=(self.ui_family or "TkDefaultFont", self.ui_size),
+                           borderwidth=0, highlightthickness=1, padx=6, pady=4)
         self.log.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
         lsb = ttk.Scrollbar(frm_log, command=self.log.yview)
         lsb.pack(side="left", fill="y", pady=8)

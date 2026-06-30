@@ -53,7 +53,7 @@ dropdown, and the default is the best one your machine supports.
 ## Install
 
 ```bash
-git clone https://github.com/turkmenlab/chop-and-drop.git
+git clone https://github.com/serhat-turkmen/chop-and-drop.git
 cd chop-and-drop
 pip install -r requirements.txt
 ```
@@ -136,6 +136,13 @@ the static scene) and Otsu-binarise it.
 
 Frame-rate reduction uses FFmpeg's `fps` filter, which drops frames to hit the target
 rate **without** changing the duration.
+
+## Working with external drives
+
+Recordings often live on an external SSD/HDD. macOS/Windows mount these
+automatically; on Linux they usually auto-mount under `/media/<you>/<LABEL>` but can
+need a manual step. See **[docs/mounting-external-drives.md](docs/mounting-external-drives.md)**
+for a step-by-step guide (identify, mount, permissions, safe-eject, troubleshooting).
 
 ## Notes
 
