@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chop-and-drop"
+version = "1.0.0"
+description = "Chop the wells, drop the frames — a small GPU GUI to crop wells / trim borders and reduce frame rate of recordings."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Serhat Turkmen" }]
+keywords = ["ffmpeg", "nvenc", "video", "microscopy", "well-plate", "fps", "gui"]
+dependencies = [
+    "numpy>=1.21",
+    "opencv-python>=4.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/turkmenlab/chop-and-drop"
+
+[project.scripts]
+chop-and-drop = "chop_and_drop:main"
+
+[tool.setuptools]
+py-modules = ["chop_and_drop"]

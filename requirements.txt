@@ -1,0 +1,4 @@
+numpy>=1.21
+opencv-python>=4.5
+# Tkinter is part of the Python standard library (install python3-tk on Debian/Ubuntu).
+# FFmpeg is an external dependency and must be installed separately (with NVENC for GPU).
