@@ -54,6 +54,16 @@ FFMPEG = "/usr/bin/ffmpeg" if os.path.exists("/usr/bin/ffmpeg") else (shutil.whi
 FFPROBE = "/usr/bin/ffprobe" if os.path.exists("/usr/bin/ffprobe") else (shutil.which("ffprobe") or "ffprobe")
 VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv", ".m4v", ".mpg", ".mpeg", ".wmv", ".flv", ".ts", ".hevc", ".h265")
 
+# Output container formats offered in the GUI. "Same as source" keeps each
+# input's own extension; the rest force that container on every output.
+OUTPUT_FORMATS = [
+    ("Same as source", ""),
+    (".mp4", ".mp4"),
+    (".avi", ".avi"),
+    (".mkv", ".mkv"),
+    (".mov", ".mov"),
+]
+
 # Encoder candidates, in preference order. kind drives how we accelerate:
 #   nvenc        -> NVIDIA GPU (CUDA decode + NVENC encode, pinnable per GPU)
 #   videotoolbox -> Apple GPU (encode-only HW accel; macOS)
@@ -486,6 +496,14 @@ class App(tk.Tk):
         ttk.Button(frm_out, text="Browse…", command=self.pick_outdir).grid(row=0, column=2, padx=8)
         ttk.Label(frm_out, text="(blank = beside each source video)",
                   foreground=c["muted"]).grid(row=1, column=1, sticky="w")
+
+        ttk.Label(frm_out, text="Output format:").grid(row=2, column=0, sticky="w", padx=8, pady=4)
+        self.fmt_var = tk.StringVar(value=OUTPUT_FORMATS[0][0])
+        ttk.Combobox(frm_out, textvariable=self.fmt_var, width=16, state="readonly",
+                     values=[label for label, _ in OUTPUT_FORMATS]
+                     ).grid(row=2, column=1, sticky="w", pady=4)
+        ttk.Label(frm_out, text="(e.g. change .mp4 to .avi)",
+                  foreground=c["muted"]).grid(row=2, column=2, sticky="w", padx=8)
         frm_out.columnconfigure(1, weight=1)
 
         # ----- progress -----
@@ -638,8 +656,12 @@ class App(tk.Tk):
             return
         crop = self.crop_mode.get()
         fps_on = self.fps_on.get()
-        if crop == "none" and not fps_on:
-            messagebox.showwarning("Nothing to do", "Pick a crop option and/or enable 'Drop frame rate'.")
+        out_fmt = dict(OUTPUT_FORMATS).get(self.fmt_var.get(), "")
+        # crop=none + no fps + a chosen format is still work: a container remux.
+        if crop == "none" and not fps_on and not out_fmt:
+            messagebox.showwarning(
+                "Nothing to do",
+                "Pick a crop option, enable 'Drop frame rate', or choose a different output format.")
             return
         if fps_on:
             try:
@@ -647,6 +669,18 @@ class App(tk.Tk):
             except Exception:
                 messagebox.showerror("Invalid FPS", "Target FPS must be a positive number.")
                 return
+        # HEVC has no valid FourCC for the AVI container, so re-encoding H.265
+        # into .avi always fails. Catch it early (only when we actually encode;
+        # a pure remux copies the source stream and doesn't use this encoder).
+        will_reencode = crop != "none" or fps_on
+        enc_codec = self.enc_specs.get(self.enc_var.get(), self.encoders[0])["codec"]
+        if will_reencode and out_fmt == ".avi" and enc_codec.startswith("hevc"):
+            messagebox.showerror(
+                "Incompatible format",
+                "HEVC (H.265) can't be stored in an .avi container.\n\n"
+                "Choose an H.264 encoder (h264_nvenc / libx264) for .avi output, "
+                "or pick .mp4 / .mkv / .mov instead.")
+            return
         out_root = self.outdir_var.get().strip()
         if out_root and not os.path.isdir(out_root):
             messagebox.showerror("Output folder", "Output folder does not exist.")
@@ -665,6 +699,7 @@ class App(tk.Tk):
             gpu=self.gpu_var.get().strip() or "1",
             overwrite=self.overwrite_var.get(),
             out_root=out_root,
+            out_fmt=out_fmt,
         )
         self.worker = threading.Thread(target=self._run, args=(params,), daemon=True)
         self.worker.start()
@@ -724,7 +759,7 @@ class App(tk.Tk):
             env["CUDA_VISIBLE_DEVICES"] = p["gpu"]  # physical GPU -> appears as device 0
         ow = ["-y"] if p["overwrite"] else ["-n"]
         fps_suffix = f"_{p['fps']}fps" if p["fps_on"] else ""
-        oext = ext if ext else ".mp4"
+        oext = p.get("out_fmt") or ext or ".mp4"
 
         def vf_chain(crop_str=None):
             parts = []
@@ -744,21 +779,34 @@ class App(tk.Tk):
                 tag = "trim"
                 out = os.path.join(outdir, f"{stem}_trim{fps_suffix}{oext}")
                 self.msg_q.put(("log", f"  content box {w}x{h} @ ({x},{y})\n"))
+            elif not p["fps_on"]:
+                # crop=none + no fps drop => pure container change (remux).
+                crop_str = None
+                tag = "remux"
+                out = os.path.join(outdir, f"{stem}{oext}")
             else:
                 crop_str = None
                 tag = "fps"
-                out = os.path.join(outdir, f"{stem}{fps_suffix or '_reencode'}{oext}")
+                out = os.path.join(outdir, f"{stem}{fps_suffix}{oext}")
 
             if os.path.abspath(out) == os.path.abspath(src):
                 self.msg_q.put(("log", f"SKIP (out==in): {base}\n")); return f"SKIP out==in: {base}"
             if os.path.exists(out) and not p["overwrite"]:
                 self.msg_q.put(("log", f"SKIP (exists): {out}\n")); return f"SKIP exists: {base}"
 
-            vf = vf_chain(crop_str)
-            rest = (["-vf", vf] if vf else []) + enc_opts + \
-                ["-an", "-progress", "pipe:1", "-nostats", out]
-            self.msg_q.put(("log", f"{tag}  {base} -> {os.path.basename(out)}\n"))
-            rc = self._run_pipeline(src, ow, rest, duration, env, p)
+            if tag == "remux":
+                # Copy the video stream as-is (no decode/encode); just rewrap the
+                # container. Bypasses the GPU pipeline since nothing is encoded.
+                rest = ["-c:v", "copy", "-an", "-progress", "pipe:1", "-nostats", out]
+                self.msg_q.put(("log", f"remux  {base} -> {os.path.basename(out)} (stream copy, no re-encode)\n"))
+                cmd = [FFMPEG, "-nostdin"] + ow + ["-i", src] + rest
+                rc = self._run_ffmpeg(cmd, duration, env)
+            else:
+                vf = vf_chain(crop_str)
+                rest = (["-vf", vf] if vf else []) + enc_opts + \
+                    ["-an", "-progress", "pipe:1", "-nostats", out]
+                self.msg_q.put(("log", f"{tag}  {base} -> {os.path.basename(out)}\n"))
+                rc = self._run_pipeline(src, ow, rest, duration, env, p)
             return f"{'OK ' if rc==0 else 'FAIL'} {tag} {base}"
 
         # ---- crop wells -> one decode pass, many outputs ----
@@ -773,14 +821,14 @@ class App(tk.Tk):
             fh.write("well,x,y,w,h\n")
             for i, (x, y, w, h) in enumerate(boxes, 1):
                 fh.write(f"{i:02d},{x},{y},{w},{h}\n")
-        first = os.path.join(well_dir, f"{stem}_well01{fps_suffix}.mp4")
+        first = os.path.join(well_dir, f"{stem}_well01{fps_suffix}{oext}")
         if os.path.exists(first) and not p["overwrite"]:
             self.msg_q.put(("log", f"SKIP (exists): {well_dir}\n"))
             return f"SKIP exists: {base} ({len(boxes)} wells)"
 
         rest = []
         for i, (x, y, w, h) in enumerate(boxes, 1):
-            out = os.path.join(well_dir, f"{stem}_well{i:02d}{fps_suffix}.mp4")
+            out = os.path.join(well_dir, f"{stem}_well{i:02d}{fps_suffix}{oext}")
             rest += ["-filter:v", vf_chain(f"crop={w}:{h}:{x}:{y}")] + enc_opts + ["-an", out]
         rest += ["-progress", "pipe:1", "-nostats"]
         tag = "wells+fps" if p["fps_on"] else "wells"

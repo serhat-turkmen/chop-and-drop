@@ -12,6 +12,9 @@ rate**; they combine in a single GPU pass.
   well**, with the grid auto-detected.
 - **Trim black border**: when cameras have different fields of view, auto-detect the
   bright imaged area and trim the black surround, leaving a small margin.
+- **Change format**: pick the output container (`.mp4`, `.avi`, `.mkv`, `.mov`) or keep
+  the source's. With no crop and no frame drop this is a fast, lossless **remux**
+  (stream copy, no re-encode).
 
 Encoding uses your GPU when possible, with a CPU fallback. The app **auto-detects
 which encoders your FFmpeg has at startup** and only offers those, defaulting to the
@@ -97,24 +100,34 @@ On Linux you can also use the included **`Chop & Drop.desktop`** launcher (edit 
    processes them one by one.
 2. **Choose a crop**: *No crop*, *Crop wells*, or *Trim black border*.
 3. **(Optional) Drop frame rate**: tick the box and set the target fps (default 7.5).
-4. **Preview crop**: overlays the detected wells / content box on a frame so you can
+4. **(Optional) Output format**: keep *Same as source* or force a container
+   (`.mp4` / `.avi` / `.mkv` / `.mov`).
+5. **Preview crop**: overlays the detected wells / content box on a frame so you can
    confirm detection and tune the margin before committing.
-5. **Convert.**
+6. **Convert.**
 
 | Crop choice | + Drop FPS? | Output |
 |-------------|-------------|--------|
-| **No crop** | required | `name_7.5fps.mp4` (whole frame, re-timed) |
+| **No crop** | required (else just a **remux**) | `name_7.5fps.mp4` (whole frame, re-timed) |
 | **Crop wells** | optional | `name/name_well01[_7.5fps].mp4 …` + `name_wells.csv` |
 | **Trim black border** | optional | `name_trim[_7.5fps].mp4` |
+| **No crop, no FPS, new format** | n/a | `name.avi` (lossless container remux) |
 
+The output extension follows **Output format** (the `.mp4` above becomes `.avi` etc.).
 Outputs go beside each source video, or into a single **Output folder** if you set
 one. Each run also writes a `conversion_report.txt`.
+
+> **Format-only conversion**: choose *No crop*, leave *Drop frame rate* off, pick a
+> different format, and Convert. It stream-copies the video (`-c:v copy`) so it's
+> near-instant and lossless. Note HEVC/H.265 cannot go into `.avi`; use `.mp4` /
+> `.mkv` / `.mov`, or re-encode with an H.264 encoder.
 
 ### Settings
 
 | Setting | Meaning |
 |---|---|
 | **Drop frame rate to** | Target fps (frames dropped, duration preserved). |
+| **Output format** | Output container: *Same as source*, `.mp4`, `.avi`, `.mkv`, or `.mov`. No crop + no FPS drop = a lossless stream-copy remux. |
 | **Crop margin (px)** | Grows each crop box outward by N px (keeps edge worms / leaves a little black border). Negative shaves inward. Width/height are forced even (yuv420p). |
 | **Encoder** | Auto-detected list (NVENC / VideoToolbox / libx264 / libx265); defaults to the fastest your machine supports. |
 | **Quality (CQ/CRF)** | Lower = better quality / larger file. Default 19. |
