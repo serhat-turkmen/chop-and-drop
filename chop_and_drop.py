@@ -75,6 +75,7 @@ ENC_CANDIDATES = [
     {"codec": "hevc_videotoolbox", "kind": "videotoolbox", "label": "hevc_videotoolbox (Apple GPU)"},
     {"codec": "libx264",           "kind": "cpu",          "label": "libx264 (CPU)"},
     {"codec": "libx265",           "kind": "cpu",          "label": "libx265 (CPU)"},
+    {"codec": "mpeg4",             "kind": "mpeg4",        "label": "mpeg4 (MPEG-4 Part 2, WormLab)"},
 ]
 
 
@@ -476,6 +477,16 @@ class App(tk.Tk):
         ttk.Spinbox(frm_set, from_=0, to=51, textvariable=self.q_var, width=8
                     ).grid(row=2, column=1, sticky="w", pady=4)
 
+        # Resize keeps aspect ratio (height auto, forced even); downscaling to a
+        # WormLab-like width is the single biggest analysis-speed win.
+        self.scale_on = tk.BooleanVar(value=False)
+        self.scale_chk = ttk.Checkbutton(frm_set, text="Resize to width (px):", variable=self.scale_on,
+                                         command=self._sync_enabled)
+        self.scale_chk.grid(row=2, column=2, sticky="e", padx=8, pady=4)
+        self.scale_var = tk.StringVar(value="2456")
+        self.scale_entry = ttk.Entry(frm_set, textvariable=self.scale_var, width=8)
+        self.scale_entry.grid(row=2, column=3, sticky="w", pady=4)
+
         ttk.Label(frm_set, text="GPU index:").grid(row=3, column=0, sticky="w", padx=8, pady=4)
         self.gpu_var = tk.StringVar(value="1")
         ttk.Spinbox(frm_set, from_=0, to=7, textvariable=self.gpu_var, width=8
@@ -537,6 +548,11 @@ class App(tk.Tk):
         self.fps_entry.config(state="normal" if self.fps_on.get() else "disabled")
         self.margin_entry.config(state="normal" if uses_crop else "disabled")
         self.preview_btn.config(state="normal" if uses_crop else "disabled")
+        # Resize sets a single output width; that's meaningless for the many small
+        # per-well outputs, so it's offered only for No crop / Trim.
+        scale_ok = self.crop_mode.get() != "wells"
+        self.scale_chk.config(state="normal" if scale_ok else "disabled")
+        self.scale_entry.config(state="normal" if (scale_ok and self.scale_on.get()) else "disabled")
 
     # ---------------- file handling ----------------
     def add_files(self):
@@ -644,6 +660,12 @@ class App(tk.Tk):
             # VideoToolbox uses -q:v 1..100 (higher = better); map from CQ 0..51.
             vt = max(1, min(100, round((51 - q) / 51 * 100)))
             opts = ["-c:v", codec, "-q:v", str(vt), "-pix_fmt", "yuv420p"]
+        elif kind == "mpeg4":
+            # MPEG-4 Part 2 (ASP) tagged FMP4 -- matches what WormLab writes/reads,
+            # so its analysis stays fast. mpeg4 uses -q:v 2..31 (lower = better);
+            # map from the CQ/CRF 0..51 slider.
+            qv = max(2, min(31, round(2 + q / 51 * 29)))
+            opts = ["-c:v", codec, "-vtag", "FMP4", "-q:v", str(qv), "-pix_fmt", "yuv420p"]
         else:  # cpu (libx264 / libx265)
             opts = ["-c:v", codec, "-preset", "veryfast", "-crf", str(q), "-pix_fmt", "yuv420p"]
         return opts, kind
@@ -656,12 +678,15 @@ class App(tk.Tk):
             return
         crop = self.crop_mode.get()
         fps_on = self.fps_on.get()
+        scale_on = self.scale_on.get() and crop != "wells"  # resize is off for wells
         out_fmt = dict(OUTPUT_FORMATS).get(self.fmt_var.get(), "")
-        # crop=none + no fps + a chosen format is still work: a container remux.
-        if crop == "none" and not fps_on and not out_fmt:
+        # crop=none + no fps + no resize + same format is genuinely nothing to do;
+        # any of a format change, resize, or fps drop makes it real work.
+        if crop == "none" and not fps_on and not scale_on and not out_fmt:
             messagebox.showwarning(
                 "Nothing to do",
-                "Pick a crop option, enable 'Drop frame rate', or choose a different output format.")
+                "Pick a crop option, enable 'Drop frame rate' or 'Resize', "
+                "or choose a different output format.")
             return
         if fps_on:
             try:
@@ -669,10 +694,16 @@ class App(tk.Tk):
             except Exception:
                 messagebox.showerror("Invalid FPS", "Target FPS must be a positive number.")
                 return
+        if scale_on:
+            try:
+                assert int(self.scale_var.get()) >= 2
+            except Exception:
+                messagebox.showerror("Invalid width", "Resize width must be an integer of at least 2 (px).")
+                return
         # HEVC has no valid FourCC for the AVI container, so re-encoding H.265
         # into .avi always fails. Catch it early (only when we actually encode;
         # a pure remux copies the source stream and doesn't use this encoder).
-        will_reencode = crop != "none" or fps_on
+        will_reencode = crop != "none" or fps_on or scale_on
         enc_codec = self.enc_specs.get(self.enc_var.get(), self.encoders[0])["codec"]
         if will_reencode and out_fmt == ".avi" and enc_codec.startswith("hevc"):
             messagebox.showerror(
@@ -700,6 +731,7 @@ class App(tk.Tk):
             overwrite=self.overwrite_var.get(),
             out_root=out_root,
             out_fmt=out_fmt,
+            scale_on=scale_on, scale_w=self.scale_var.get().strip(),
         )
         self.worker = threading.Thread(target=self._run, args=(params,), daemon=True)
         self.worker.start()
@@ -717,6 +749,7 @@ class App(tk.Tk):
             "Apple GPU (VideoToolbox)" if p["enc_kind"] == "videotoolbox" else "CPU")
         report = ["Chop & Drop run report",
                   f"crop={p['crop']} fps={'off' if not p['fps_on'] else p['fps']} "
+                  f"resize={'off' if not p.get('scale_on') else p['scale_w'] + 'px wide'} "
                   f"margin={p['margin']} encoder={p['enc_opts'][1]} accel={accel}", ""]
         for idx, src in enumerate(p["files"]):
             if self.cancel_flag.is_set():
@@ -767,7 +800,15 @@ class App(tk.Tk):
                 parts.append(crop_str)
             if p["fps_on"]:
                 parts.append(f"fps={p['fps']}")
+            # Resize (aspect kept, height forced even). Not applied to wells --
+            # a single target width is meaningless across many small crops.
+            if p.get("scale_on") and p["crop"] != "wells":
+                parts.append(f"scale={p['scale_w']}:-2")
             return ",".join(parts)
+
+        # Pin the output frame rate when dropping fps: forces a clean CFR header
+        # so containers like AVI can't advertise a wrong rate/frame-count.
+        rate_opt = ["-r", p["fps"]] if p["fps_on"] else []
 
         # ---- single-output modes (no crop, or trim-border) ----
         if p["crop"] in ("none", "trim"):
@@ -779,15 +820,19 @@ class App(tk.Tk):
                 tag = "trim"
                 out = os.path.join(outdir, f"{stem}_trim{fps_suffix}{oext}")
                 self.msg_q.put(("log", f"  content box {w}x{h} @ ({x},{y})\n"))
-            elif not p["fps_on"]:
-                # crop=none + no fps drop => pure container change (remux).
+            elif not p["fps_on"] and not p.get("scale_on"):
+                # crop=none + no fps + no resize => pure container change (remux).
                 crop_str = None
                 tag = "remux"
                 out = os.path.join(outdir, f"{stem}{oext}")
             else:
                 crop_str = None
-                tag = "fps"
-                out = os.path.join(outdir, f"{stem}{fps_suffix}{oext}")
+                if p["fps_on"]:
+                    tag = "fps"
+                    out = os.path.join(outdir, f"{stem}{fps_suffix}{oext}")
+                else:  # resize only
+                    tag = "resize"
+                    out = os.path.join(outdir, f"{stem}_resized{oext}")
 
             if os.path.abspath(out) == os.path.abspath(src):
                 self.msg_q.put(("log", f"SKIP (out==in): {base}\n")); return f"SKIP out==in: {base}"
@@ -803,7 +848,7 @@ class App(tk.Tk):
                 rc = self._run_ffmpeg(cmd, duration, env)
             else:
                 vf = vf_chain(crop_str)
-                rest = (["-vf", vf] if vf else []) + enc_opts + \
+                rest = (["-vf", vf] if vf else []) + rate_opt + enc_opts + \
                     ["-an", "-progress", "pipe:1", "-nostats", out]
                 self.msg_q.put(("log", f"{tag}  {base} -> {os.path.basename(out)}\n"))
                 rc = self._run_pipeline(src, ow, rest, duration, env, p)
@@ -829,7 +874,7 @@ class App(tk.Tk):
         rest = []
         for i, (x, y, w, h) in enumerate(boxes, 1):
             out = os.path.join(well_dir, f"{stem}_well{i:02d}{fps_suffix}{oext}")
-            rest += ["-filter:v", vf_chain(f"crop={w}:{h}:{x}:{y}")] + enc_opts + ["-an", out]
+            rest += ["-filter:v", vf_chain(f"crop={w}:{h}:{x}:{y}")] + rate_opt + enc_opts + ["-an", out]
         rest += ["-progress", "pipe:1", "-nostats"]
         tag = "wells+fps" if p["fps_on"] else "wells"
         self.msg_q.put(("log", f"{tag}  {base}: {len(boxes)} wells -> {well_dir} (one decode pass)\n"))

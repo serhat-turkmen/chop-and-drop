@@ -15,6 +15,10 @@ rate**; they combine in a single GPU pass.
 - **Change format**: pick the output container (`.mp4`, `.avi`, `.mkv`, `.mov`) or keep
   the source's. With no crop and no frame drop this is a fast, lossless **remux**
   (stream copy, no re-encode).
+- **Resize**: downscale to a target width (aspect ratio kept) to cut pixel count.
+- **WormLab-ready output**: an `mpeg4 (MPEG-4 Part 2, WormLab)` encoder preset writes
+  the same `FMP4` AVI codec WormLab records; combined with resize + frame-drop it
+  produces files that analyze as fast as native WormLab recordings.
 
 Encoding uses your GPU when possible, with a CPU fallback. The app **auto-detects
 which encoders your FFmpeg has at startup** and only offers those, defaulting to the
@@ -126,10 +130,11 @@ one. Each run also writes a `conversion_report.txt`.
 
 | Setting | Meaning |
 |---|---|
-| **Drop frame rate to** | Target fps (frames dropped, duration preserved). |
-| **Output format** | Output container: *Same as source*, `.mp4`, `.avi`, `.mkv`, or `.mov`. No crop + no FPS drop = a lossless stream-copy remux. |
+| **Drop frame rate to** | Target fps (frames dropped, duration preserved). Output rate is pinned (`-r`) so the container header is clean (no wrong rate/frame-count). |
+| **Resize to width (px)** | Downscale to a target width, height auto (aspect kept, forced even). Biggest analysis-speed win. Offered for *No crop* / *Trim* (not per-well). |
+| **Output format** | Output container: *Same as source*, `.mp4`, `.avi`, `.mkv`, or `.mov`. No crop + no FPS drop + no resize = a lossless stream-copy remux. |
 | **Crop margin (px)** | Grows each crop box outward by N px (keeps edge worms / leaves a little black border). Negative shaves inward. Width/height are forced even (yuv420p). |
-| **Encoder** | Auto-detected list (NVENC / VideoToolbox / libx264 / libx265); defaults to the fastest your machine supports. |
+| **Encoder** | Auto-detected list (NVENC / VideoToolbox / libx264 / libx265); defaults to the fastest your machine supports. Also includes **`mpeg4 (MPEG-4 Part 2, WormLab)`**, which writes the same `FMP4` AVI codec WormLab records so its analysis stays fast. |
 | **Quality (CQ/CRF)** | Lower = better quality / larger file. Default 19. |
 | **GPU index** | Which NVIDIA GPU to use (pinned via `CUDA_VISIBLE_DEVICES`). |
 | **Overwrite** | Off by default; existing outputs are skipped (resumable). |
@@ -169,6 +174,10 @@ for a step-by-step guide (identify, mount, permissions, safe-eject, troubleshoot
 - One job already saturates the GPU's single NVENC engine, so running several jobs
   on the *same* GPU does not speed things up. To go faster, use a second GPU.
 - The tool calls `ffmpeg`/`ffprobe` from your `PATH` (preferring `/usr/bin/ffmpeg`).
+- **Make a slow recording fast in WormLab**: *No crop*, tick *Resize to width* (e.g. match
+  the WormLab recording's width), tick *Drop frame rate*, set **Encoder =
+  `mpeg4 (MPEG-4 Part 2, WormLab)`** and **Output format = `.avi`**. This matches
+  WormLab's native codec, resolution, and frame rate, so analysis runs at native speed.
 
 ## License
 
