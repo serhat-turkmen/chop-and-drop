@@ -34,7 +34,7 @@ the acceleration:
 You never have to pick manually; unavailable encoders simply don't appear in the
 dropdown, and the default is the best one your machine supports.
 
-![Chop & Drop](assets/screenshot.png)
+![Chop & Drop](assets/screenshot-v2.png)
 
 ---
 
